@@ -2,6 +2,8 @@
 
 Pulse is a full-stack React and Node.js submission for Groww CODE 2026. It answers one question clearly: **what meaningfully changed since I last checked?**
 
+Pulse is a modular full-stack application with a deliberately focused dependency set: React for the interface, Node.js for the API and application logic, and PostgreSQL for durable persistence. A JSON adapter provides a zero-configuration fallback for evaluation, while the backend remains framework-free and uses Node's built-in HTTP server.
+
 ![React](https://img.shields.io/badge/React-19-149eca) ![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-persistence-4169e1)
 
 ## Product preview
@@ -94,7 +96,7 @@ Browser (React + responsive CSS)
   ├── REST: bootstrap + mutations
   └── SSE: cross-session invalidation
               │
-Node HTTP server (no framework)
+Node HTTP server (framework-free backend)
   ├── market-data adapter (provider + simulator fallback)
   ├── scoring.js (pure significance engine)
   ├── optimistic concurrency
