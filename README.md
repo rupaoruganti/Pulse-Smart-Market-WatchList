@@ -2,7 +2,7 @@
 
 Pulse is a full-stack React and Node.js submission for Groww CODE 2026. It answers one question clearly: **what meaningfully changed since I last checked?**
 
-![React](https://img.shields.io/badge/React-19-149eca) ![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-optional-4169e1)
+![React](https://img.shields.io/badge/React-19-149eca) ![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-persistence-4169e1)
 
 ## Product preview
 
@@ -37,9 +37,9 @@ The server batches the 12 configured `SYMBOL:NSE` instruments into one `/quote` 
 
 Batching reduces network overhead but each symbol still consumes one provider credit, so check the [official Twelve Data batch-request documentation](https://support.twelvedata.com/en/articles/5203360-batch-api-requests) before increasing the universe or polling frequency. Data freshness depends on the provider plan and exchange entitlements; Pulse deliberately labels this “Provider feed,” not guaranteed real-time data.
 
-### Optional PostgreSQL persistence
+### Running with PostgreSQL
 
-Pulse uses the local JSON adapter by default for a zero-setup review. To run the same application with shared, durable PostgreSQL persistence, install dependencies and provide a connection string:
+PostgreSQL is Pulse's durable persistence layer for accounts, watchlists, and review baselines. Install dependencies, create a database, and provide its connection string:
 
 ```powershell
 npm install
@@ -48,6 +48,8 @@ node server.js
 ```
 
 The server creates `pulse_accounts` automatically and stores each account in its own versioned row. Updates use an atomic `UPDATE ... WHERE version = ?`, so stale writers are rejected without locking or rewriting unrelated accounts. Set `PGSSL=require` only when the hosted database requires TLS.
+
+For zero-configuration evaluation, Pulse automatically uses its local JSON adapter when `DATABASE_URL` is not configured. Both adapters implement the same repository contract, so application behavior remains consistent while reviewers can run the demo without installing a database.
 
 ## Product decisions
 
@@ -68,7 +70,7 @@ The baseline moves only when **Mark as reviewed** is used. Opening another tab d
 
 ### Reliability choices
 
-- Writes use a temporary file plus atomic rename to avoid partial JSON corruption.
+- PostgreSQL performs atomic row-level updates; the zero-configuration JSON fallback uses a temporary file plus atomic rename to avoid partial writes.
 - Every mutation includes the last-seen store version. A stale writer receives `409 Conflict` instead of overwriting newer data.
 - Server-sent events fan out both market ticks and successful user-state writes to open sessions.
 - Market timestamps, feed source, and delay are visible; stale data is never presented as live.
@@ -96,12 +98,14 @@ Node HTTP server (no framework)
   ├── market-data adapter (provider + simulator fallback)
   ├── scoring.js (pure significance engine)
   ├── optimistic concurrency
-  └── atomic JSON persistence
+  └── persistence repository
+      ├── PostgreSQL (durable shared state)
+      └── JSON (zero-configuration fallback)
 ```
 
-The JSON adapter is appropriate for a local demo, so each mutation rewrites one small file. When `DATABASE_URL` is configured, the PostgreSQL adapter instead performs row-level account updates with per-account optimistic versions, allowing multiple application instances to share durable state. At greater scale, watchlists, items, and review baselines can be normalized further and market ticks can enter through a durable stream, be processed once, and fan out through a cached significance service.
+With `DATABASE_URL` configured, PostgreSQL performs row-level account updates with per-account optimistic versions, allowing multiple application instances to share durable state. The JSON adapter exists as a zero-configuration evaluation fallback and rewrites one small local document atomically. At greater scale, watchlists, items, and review baselines can be normalized further and market ticks can enter through a durable stream, be processed once, and fan out through a cached significance service.
 
-Runtime accounts and password hashes live in the ignored `data/store.json`. The repository ships only `data/store.seed.json`, containing a passwordless fictional demo account. On first boot, the server copies that seed into a fresh runtime store, preventing local test identities or credentials from entering a submission.
+With PostgreSQL, runtime accounts and password hashes live in the `pulse_accounts` table. In fallback mode they live in the ignored `data/store.json`. The repository ships only `data/store.seed.json`, containing a passwordless fictional demo account, which initializes either persistence adapter without exposing local test identities or credentials.
 
 The simulator exercises changing and stale data paths, but deliberately does not pretend to reproduce conflicting exchange providers. Production ingestion would attach provider and exchange timestamps, reject older ticks, and quarantine materially conflicting same-timestamp values for reconciliation while serving the last verified observation with reduced confidence.
 
