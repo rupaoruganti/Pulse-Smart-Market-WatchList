@@ -4,10 +4,16 @@ Pulse is a full-stack, dependency-free submission for Groww CODE 2026. It answer
 
 ![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933) ![Dependencies](https://img.shields.io/badge/runtime_dependencies-0-00a984)
 
+## Product preview
+
+![Pulse smart watchlist showing ranked meaningful changes](01-smart-watchlist.png)
+
+![Pulse Discover page for finding and adding companies](02-discover.png)
+
 ## Run locally
 
 ```bash
-npm start
+node server.js
 ```
 
 Open `http://localhost:3000`. Node.js 20+ is the only requirement; there is no install or build step.
@@ -22,7 +28,7 @@ Pulse supports server-side quote polling through Twelve Data. Create an API key,
 
 ```powershell
 $env:TWELVE_DATA_API_KEY="your-key"
-npm.cmd start
+node server.js
 ```
 
 The server batches the 12 configured `SYMBOL:NSE` instruments into one `/quote` request every 60 seconds. The key never enters browser code or API responses. If the provider is unavailable or rate-limited, the UI says so explicitly and temporarily switches to the labeled simulator. Remove the environment variable to use simulation only.
@@ -73,7 +79,7 @@ Browser (responsive HTML/CSS/JS)
   └── SSE: cross-session invalidation
               │
 Node HTTP server (no framework)
-  ├── deterministic demo market adapter
+  ├── market-data adapter (provider + simulator fallback)
   ├── scoring.js (pure significance engine)
   ├── optimistic concurrency
   └── atomic JSON persistence
@@ -84,6 +90,14 @@ The JSON store is appropriate for a single-user demo, so each mutation currently
 Runtime accounts and password hashes live in the ignored `data/store.json`. The repository ships only `data/store.seed.json`, containing a passwordless fictional demo account. On first boot, the server copies that seed into a fresh runtime store, preventing local test identities or credentials from entering a submission.
 
 The simulator exercises changing and stale data paths, but deliberately does not pretend to reproduce conflicting exchange providers. Production ingestion would attach provider and exchange timestamps, reject older ticks, and quarantine materially conflicting same-timestamp values for reconciliation while serving the last verified observation with reduced confidence.
+
+## Tests
+
+```bash
+npm test
+```
+
+The 17 automated tests cover scoring, reviewed-anomaly suppression and re-escalation, corporate-action handling, provider normalization and failure, authentication, account isolation, optimistic concurrency, watchlist CRUD, demo reset, and path traversal.
 
 ## API
 
@@ -96,10 +110,10 @@ The simulator exercises changing and stale data paths, but deliberately does not
 | `POST` | `/api/auth/demo` | Enter the passwordless demo account |
 | `POST` | `/api/auth/logout` | Invalidate the current session |
 | `POST` | `/api/watchlists` | Create a watchlist |
-| `PATCH/DELETE` | `/api/watchlists/:id` | Rename/delete a watchlist |
-| `PATCH` | `/api/profile` | Update the personal demo profile |
-| `PUT/DELETE` | `/api/watchlists/:id/items/:symbol` | Add/remove an instrument |
+| `PATCH` | `/api/watchlists/:id` | Rename a watchlist |
 | `DELETE` | `/api/watchlists/:id` | Delete a watchlist |
+| `PATCH` | `/api/profile` | Update the authenticated account profile |
+| `PUT/DELETE` | `/api/watchlists/:id/items/:symbol` | Add/remove an instrument |
 | `POST` | `/api/review` | Advance the explicit review baseline |
 | `POST` | `/api/account/reset` | Restore starter watchlists and review state |
 
@@ -107,4 +121,6 @@ All mutations accept `{ "version": number }`.
 
 ## Intentional scope
 
-This is not a trading terminal. Order placement, recommendations, social sentiment, and dozens of technical indicators were left out because they dilute the core job. The included market feed is a visibly labeled deterministic simulation, not real NSE data; production would use an exchange-authorized provider and the reconciliation policy above.
+Pulse is not a trading terminal. Order placement, recommendations, social sentiment, and excessive technical indicators were deliberately excluded to keep the experience focused on understanding meaningful changes.
+
+Pulse uses a clearly labeled deterministic simulation by default, with optional Twelve Data NSE quotes when configured. Provider freshness depends on the selected plan and exchange entitlements; Pulse does not claim guaranteed exchange real-time data.
