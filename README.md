@@ -1,8 +1,8 @@
 # Pulse — Smart Market Watchlist
 
-Pulse is a full-stack, dependency-free submission for Groww CODE 2026. It answers one question clearly: **what meaningfully changed since I last checked?**
+Pulse is a full-stack React and Node.js submission for Groww CODE 2026. It answers one question clearly: **what meaningfully changed since I last checked?**
 
-![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933) ![Dependencies](https://img.shields.io/badge/runtime_dependencies-0-00a984)
+![React](https://img.shields.io/badge/React-19-149eca) ![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-optional-4169e1)
 
 ## Product preview
 
@@ -17,6 +17,8 @@ node server.js
 ```
 
 Open `http://localhost:3000`. Node.js 20+ is the only requirement; there is no install or build step.
+
+The repository includes the compiled React bundle so the default demo still has no installation or frontend-build step. For development, run `npm install` followed by `npm run build` after changing `src/main.jsx`.
 
 On first visit, register a personal account or choose **Continue with demo account**. The server binds to `127.0.0.1` by default, so it is available only on this computer and does not need public firewall access.
 
@@ -34,6 +36,18 @@ node server.js
 The server batches the 12 configured `SYMBOL:NSE` instruments into one `/quote` request every 60 seconds. The key never enters browser code or API responses. If the provider is unavailable or rate-limited, the UI says so explicitly and temporarily switches to the labeled simulator. Remove the environment variable to use simulation only.
 
 Batching reduces network overhead but each symbol still consumes one provider credit, so check the [official Twelve Data batch-request documentation](https://support.twelvedata.com/en/articles/5203360-batch-api-requests) before increasing the universe or polling frequency. Data freshness depends on the provider plan and exchange entitlements; Pulse deliberately labels this “Provider feed,” not guaranteed real-time data.
+
+### Optional PostgreSQL persistence
+
+Pulse uses the local JSON adapter by default for a zero-setup review. To run the same application with shared, durable PostgreSQL persistence, install dependencies and provide a connection string:
+
+```powershell
+npm install
+$env:DATABASE_URL="postgresql://postgres:password@localhost:5432/pulse"
+node server.js
+```
+
+The server creates `pulse_accounts` automatically and stores each account in its own versioned row. Updates use an atomic `UPDATE ... WHERE version = ?`, so stale writers are rejected without locking or rewriting unrelated accounts. Set `PGSSL=require` only when the hosted database requires TLS.
 
 ## Product decisions
 
@@ -74,7 +88,7 @@ Sessions are intentionally held in memory for this single-process demo, so resta
 ## Architecture
 
 ```text
-Browser (responsive HTML/CSS/JS)
+Browser (React + responsive CSS)
   ├── REST: bootstrap + mutations
   └── SSE: cross-session invalidation
               │
@@ -85,7 +99,7 @@ Node HTTP server (no framework)
   └── atomic JSON persistence
 ```
 
-The JSON store is appropriate for a single-user demo, so each mutation currently rewrites one small file. In production, row-level updates in Postgres replace this wholesale rewrite. The interface maps to `watchlists`, `watchlist_items`, and `review_baselines`, using row versions for optimistic locking. Market ticks would enter through a durable stream, be normalized once, and fan out through a cached significance service rather than being calculated separately per browser.
+The JSON adapter is appropriate for a local demo, so each mutation rewrites one small file. When `DATABASE_URL` is configured, the PostgreSQL adapter instead performs row-level account updates with per-account optimistic versions, allowing multiple application instances to share durable state. At greater scale, watchlists, items, and review baselines can be normalized further and market ticks can enter through a durable stream, be processed once, and fan out through a cached significance service.
 
 Runtime accounts and password hashes live in the ignored `data/store.json`. The repository ships only `data/store.seed.json`, containing a passwordless fictional demo account. On first boot, the server copies that seed into a fresh runtime store, preventing local test identities or credentials from entering a submission.
 
@@ -93,7 +107,7 @@ The simulator exercises changing and stale data paths, but deliberately does not
 
 ## Tests
 
-The 17 automated tests cover scoring, reviewed-anomaly suppression and re-escalation, corporate-action handling, provider normalization and failure, authentication, account isolation, optimistic concurrency, watchlist CRUD, demo reset, and path traversal.
+The 20 automated tests cover scoring, reviewed-anomaly suppression and re-escalation, corporate-action handling, provider normalization and failure, authentication, account isolation, persistence contracts, optimistic concurrency, watchlist CRUD, demo reset, and path traversal.
 
 ## API
 

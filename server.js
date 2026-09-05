@@ -4,12 +4,13 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { scoreStock } = require('./scoring');
 const { fetchTwelveDataQuotes } = require('./market-data');
+const { createRepository } = require('./persistence');
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.PULSE_HOST || '127.0.0.1';
 const ROOT = __dirname;
 const STORE_PATH = process.env.PULSE_STORE_PATH || path.join(ROOT, 'data', 'store.json');
-const SEED_PATH = path.join(ROOT, 'data', 'store.seed.json');
+const repository = createRepository({ root: ROOT, storePath: STORE_PATH });
 const clients = new Set();
 const sessions = new Map();
 const loginAttempts = new Map();
@@ -53,42 +54,28 @@ function freshDemoState() {
   };
 }
 
-function readStore() {
-  if (!fs.existsSync(STORE_PATH)) fs.copyFileSync(SEED_PATH, STORE_PATH);
-  return JSON.parse(fs.readFileSync(STORE_PATH, 'utf8'));
-}
-
-function writeStore(next, expectedVersion) {
-  const current = readStore();
-  if (expectedVersion != null && Number(expectedVersion) !== current.version) {
-    const error = new Error('This watchlist changed on another device. Refresh and try again.');
-    error.status = 409;
-    throw error;
-  }
-  next.version = current.version + 1;
-  const temp = `${STORE_PATH}.tmp`;
-  fs.writeFileSync(temp, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
-  fs.renameSync(temp, STORE_PATH);
-  broadcast('store', { version: next.version });
-  return next;
-}
-
 function json(res, status, responseBody, headers = {}) { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers }); res.end(JSON.stringify(responseBody)); }
 function body(req) { return new Promise((resolve, reject) => { let raw = ''; req.on('data', chunk => { raw += chunk; if (raw.length > 100_000) req.destroy(); }); req.on('end', () => { try { resolve(raw ? JSON.parse(raw) : {}); } catch { reject(Object.assign(new Error('Invalid JSON'), { status: 400 })); } }); req.on('error', reject); }); }
 function broadcast(event, payload) { for (const client of clients) client.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`); }
 
 function cookies(req) { return Object.fromEntries(String(req.headers.cookie || '').split(';').map(value => value.trim().split('=').map(decodeURIComponent)).filter(parts => parts.length === 2)); }
-function authenticated(req, store = readStore()) {
+async function authenticated(req) {
   const token = cookies(req).pulse_session; const session = sessions.get(token);
-  if (!session || session.expiresAt <= Date.now()) { if (token) sessions.delete(token); return { store, account: undefined }; }
-  return { store, account: store.accounts.find(item => item.id === session.accountId) };
+  if (!session || session.expiresAt <= Date.now()) { if (token) sessions.delete(token); return null; }
+  return repository.findById(session.accountId);
 }
 function sessionCookie(token, clear = false) { return `pulse_session=${clear ? '' : token}; HttpOnly; SameSite=Strict; Path=/; ${clear ? 'Max-Age=0' : 'Max-Age=28800'}`; }
 function createSession(accountId) { const token = crypto.randomBytes(32).toString('base64url'); sessions.set(token, { accountId, expiresAt: Date.now() + 8 * 60 * 60 * 1000 }); return token; }
 function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) { return { salt, hash: crypto.scryptSync(password, salt, 64).toString('hex') }; }
 function validPassword(password, account) { if (!account.passwordHash || !account.passwordSalt) return false; const candidate = Buffer.from(hashPassword(password, account.passwordSalt).hash, 'hex'); const expected = Buffer.from(account.passwordHash, 'hex'); return candidate.length === expected.length && crypto.timingSafeEqual(candidate, expected); }
-function bootstrap(store, account) {
-  return { version: store.version, user: account.user, lastReviewedAt: account.lastReviewedAt, watchlists: account.watchlists, market: { ...marketMeta, asOf: marketAsOf }, instruments: Object.values(instruments).map(stock => scoreStock(stock, account.lastReviewedSnapshots?.[stock.symbol])) };
+function bootstrap(account, version) {
+  return { version, user: account.user, lastReviewedAt: account.lastReviewedAt, watchlists: account.watchlists, market: { ...marketMeta, asOf: marketAsOf }, instruments: Object.values(instruments).map(stock => scoreStock(stock, account.lastReviewedSnapshots?.[stock.symbol])) };
+}
+
+async function saveAccount(account, expectedVersion) {
+  const saved = await repository.update(account, expectedVersion);
+  broadcast('store', { accountId: account.id, version: saved.version });
+  return saved;
 }
 
 function rateLimited(req, email) {
@@ -139,42 +126,44 @@ async function refreshProviderMarket() {
 
 async function api(req, res, url) {
   if (req.method === 'POST' && url.pathname === '/api/auth/demo') {
-    const store = readStore(); const account = store.accounts.find(item => item.id === 'demo-user');
-    if (!account) return json(res, 404, { error: 'Demo account is unavailable.' });
-    const token = createSession(account.id);
-    return json(res, 200, bootstrap(store, account), { 'Set-Cookie': sessionCookie(token) });
+    const record = await repository.findById('demo-user');
+    if (!record) return json(res, 404, { error: 'Demo account is unavailable.' });
+    const token = createSession(record.account.id);
+    return json(res, 200, bootstrap(record.account, record.version), { 'Set-Cookie': sessionCookie(token) });
   }
   if (req.method === 'POST' && url.pathname === '/api/auth/register') {
-    const input = await body(req); const store = readStore();
+    const input = await body(req);
     const name = String(input.name || '').trim().slice(0, 50);
     const email = String(input.email || '').trim().toLowerCase().slice(0, 100);
     const password = String(input.password || '');
     if (name.length < 2) return json(res, 422, { error: 'Enter a name with at least 2 characters.' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json(res, 422, { error: 'Enter a valid email address.' });
     if (password.length < 8 || password.length > 128) return json(res, 422, { error: 'Password must contain 8 to 128 characters.' });
-    if (store.accounts.some(item => item.user.email === email)) return json(res, 409, { error: 'An account with this email already exists.' });
+    if (await repository.findByEmail(email)) return json(res, 409, { error: 'An account with this email already exists.' });
     const passwordData = hashPassword(password);
     const account = { id: crypto.randomUUID(), user: { id: crypto.randomUUID(), name, email, accountType: 'Personal account' }, passwordSalt: passwordData.salt, passwordHash: passwordData.hash, lastReviewedAt: new Date().toISOString(), lastReviewedSnapshots: {}, watchlists: [{ id: crypto.randomUUID(), name: 'My watchlist', symbolIds: ['RELIANCE', 'HDFCBANK', 'TCS'] }] };
-    store.accounts.push(account); const saved = writeStore(store, store.version); const token = createSession(account.id);
-    return json(res, 201, bootstrap(saved, account), { 'Set-Cookie': sessionCookie(token) });
+    const saved = await repository.create(account); const token = createSession(account.id);
+    broadcast('store', { accountId: account.id, version: saved.version });
+    return json(res, 201, bootstrap(saved.account, saved.version), { 'Set-Cookie': sessionCookie(token) });
   }
   if (req.method === 'POST' && url.pathname === '/api/auth/login') {
-    const input = await body(req); const store = readStore();
+    const input = await body(req);
     const email = String(input.email || '').trim().toLowerCase(); const password = String(input.password || '');
     if (rateLimited(req, email)) return json(res, 429, { error: 'Too many attempts. Wait one minute and try again.' });
-    const account = store.accounts.find(item => item.user.email === email);
+    const record = await repository.findByEmail(email); const account = record?.account;
     if (!account || !validPassword(password, account)) return json(res, 401, { error: 'Email or password is incorrect.' });
     loginAttempts.delete(`${req.socket.remoteAddress}:${email}`); const token = createSession(account.id);
-    return json(res, 200, bootstrap(store, account), { 'Set-Cookie': sessionCookie(token) });
+    return json(res, 200, bootstrap(account, record.version), { 'Set-Cookie': sessionCookie(token) });
   }
   if (req.method === 'POST' && url.pathname === '/api/auth/logout') {
     const token = cookies(req).pulse_session; if (token) sessions.delete(token);
     return json(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie('', true) });
   }
 
-  const auth = authenticated(req); const { store, account } = auth;
-  if (!account) return json(res, 401, { error: 'Please sign in to continue.' });
-  if (req.method === 'GET' && url.pathname === '/api/bootstrap') return json(res, 200, bootstrap(store, account));
+  const auth = await authenticated(req);
+  if (!auth) return json(res, 401, { error: 'Please sign in to continue.' });
+  const { account, version } = auth;
+  if (req.method === 'GET' && url.pathname === '/api/bootstrap') return json(res, 200, bootstrap(account, version));
   if (req.method === 'GET' && url.pathname === '/api/events') {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
     res.write(`event: connected\ndata: {}\n\n`); clients.add(res); req.on('close', () => clients.delete(res)); return;
@@ -184,7 +173,7 @@ async function api(req, res, url) {
     const name = String(input.name || '').trim().slice(0, 40);
     if (!name) return json(res, 422, { error: 'Watchlist name is required.' });
     account.watchlists.push({ id: crypto.randomUUID(), name, symbolIds: [] });
-    const saved = writeStore(store, input.version); return json(res, 201, bootstrap(saved, account));
+    const saved = await saveAccount(account, input.version); return json(res, 201, bootstrap(saved.account, saved.version));
   }
   if (req.method === 'PATCH' && url.pathname === '/api/profile') {
     const input = await body(req);
@@ -192,14 +181,15 @@ async function api(req, res, url) {
     const email = String(input.email || '').trim().toLowerCase().slice(0, 100);
     if (name.length < 2) return json(res, 422, { error: 'Enter a name with at least 2 characters.' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json(res, 422, { error: 'Enter a valid email address.' });
-    if (store.accounts.some(item => item.id !== account.id && item.user.email === email)) return json(res, 409, { error: 'That email is already in use.' });
+    const owner = await repository.findByEmail(email);
+    if (owner && owner.account.id !== account.id) return json(res, 409, { error: 'That email is already in use.' });
     account.user = { ...account.user, name, email };
-    const saved = writeStore(store, input.version); return json(res, 200, bootstrap(saved, account));
+    const saved = await saveAccount(account, input.version); return json(res, 200, bootstrap(saved.account, saved.version));
   }
   if (req.method === 'POST' && ['/api/account/reset', '/api/demo/reset'].includes(url.pathname)) {
     const input = await body(req);
     Object.assign(account, freshDemoState());
-    const saved = writeStore(store, input.version); return json(res, 200, bootstrap(saved, account));
+    const saved = await saveAccount(account, input.version); return json(res, 200, bootstrap(saved.account, saved.version));
   }
   const itemMatch = url.pathname.match(/^\/api\/watchlists\/([^/]+)\/items\/([^/]+)$/);
   if (itemMatch && ['PUT', 'DELETE'].includes(req.method)) {
@@ -209,7 +199,7 @@ async function api(req, res, url) {
     if (!instruments[symbol]) return json(res, 404, { error: 'Instrument not found.' });
     if (req.method === 'PUT' && !list.symbolIds.includes(symbol)) list.symbolIds.push(symbol);
     if (req.method === 'DELETE') list.symbolIds = list.symbolIds.filter(id => id !== symbol);
-    const saved = writeStore(store, input.version); return json(res, 200, bootstrap(saved, account));
+    const saved = await saveAccount(account, input.version); return json(res, 200, bootstrap(saved.account, saved.version));
   }
   const listMatch = url.pathname.match(/^\/api\/watchlists\/([^/]+)$/);
   if (listMatch && req.method === 'PATCH') {
@@ -218,18 +208,18 @@ async function api(req, res, url) {
     const name = String(input.name || '').trim().slice(0, 40);
     if (!name) return json(res, 422, { error: 'Watchlist name is required.' });
     if (account.watchlists.some(item => item.id !== list.id && item.name.toLowerCase() === name.toLowerCase())) return json(res, 409, { error: 'A watchlist with that name already exists.' });
-    list.name = name; const saved = writeStore(store, input.version); return json(res, 200, bootstrap(saved, account));
+    list.name = name; const saved = await saveAccount(account, input.version); return json(res, 200, bootstrap(saved.account, saved.version));
   }
   if (listMatch && req.method === 'DELETE') {
     const input = await body(req);
     if (account.watchlists.length === 1) return json(res, 422, { error: 'Keep at least one watchlist.' });
     account.watchlists = account.watchlists.filter(item => item.id !== listMatch[1]);
-    const saved = writeStore(store, input.version); return json(res, 200, bootstrap(saved, account));
+    const saved = await saveAccount(account, input.version); return json(res, 200, bootstrap(saved.account, saved.version));
   }
   if (req.method === 'POST' && url.pathname === '/api/review') {
     const input = await body(req); account.lastReviewedAt = new Date().toISOString();
     account.lastReviewedSnapshots = Object.fromEntries(Object.values(instruments).map(stock => [stock.symbol, { price: stock.price, volume: stock.volume, high: stock.high, low: stock.low, timestamp: account.lastReviewedAt }]));
-    const saved = writeStore(store, input.version); return json(res, 200, bootstrap(saved, account));
+    const saved = await saveAccount(account, input.version); return json(res, 200, bootstrap(saved.account, saved.version));
   }
   return json(res, 404, { error: 'Not found' });
 }
@@ -246,8 +236,16 @@ const server = http.createServer(async (req, res) => {
   } catch (error) { json(res, error.status || 500, { error: error.status ? error.message : 'Something went wrong.' }); }
 });
 
-server.listen(PORT, HOST, () => console.log(`Pulse is running at http://localhost:${PORT}`));
-if (process.env.PULSE_DISABLE_TICKS !== '1') {
-  if (twelveDataKey) { refreshProviderMarket(); setInterval(refreshProviderMarket, 60_000); setInterval(() => { if (!providerHealthy) advanceDemoMarket(true); }, 8_000); }
-  else setInterval(advanceDemoMarket, 8_000);
+async function start() {
+  await repository.initialize();
+  server.listen(PORT, HOST, () => console.log(`Pulse is running at http://localhost:${PORT} · ${repository.kind} persistence`));
+  if (process.env.PULSE_DISABLE_TICKS !== '1') {
+    if (twelveDataKey) { refreshProviderMarket(); setInterval(refreshProviderMarket, 60_000); setInterval(() => { if (!providerHealthy) advanceDemoMarket(true); }, 8_000); }
+    else setInterval(advanceDemoMarket, 8_000);
+  }
 }
+
+start().catch(error => {
+  console.error(`Pulse failed to start: ${error.message}`);
+  process.exitCode = 1;
+});

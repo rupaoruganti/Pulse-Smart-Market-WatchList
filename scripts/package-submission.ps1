@@ -16,10 +16,12 @@ try {
   $files = @(
     '.gitignore',
     'package.json',
+    'package-lock.json',
     'README.md',
     'server.js',
     'scoring.js',
     'market-data.js',
+    'persistence.js',
     '01-smart-watchlist.png',
     '02-discover.png'
   )
@@ -27,7 +29,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $projectRoot $file) -Destination (Join-Path $stagingPath $file)
   }
 
-  foreach ($directory in @('public', 'test', 'scripts')) {
+  foreach ($directory in @('public', 'src', 'test', 'scripts')) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $directory) -Destination $stagingPath -Recurse
   }
 
