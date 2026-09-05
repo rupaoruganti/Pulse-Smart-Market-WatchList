@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f8f5">
+  <title>Pulse — Smart market watchlist</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/discover.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <a class="brand" href="#" aria-label="Pulse home"><span class="brand-mark"><i></i><i></i><i></i></span><span>pulse</span></a>
+      <nav class="primary-nav">
+        <a id="watchlist-link" class="nav-link active" href="#watchlist"><span class="icon" data-icon="eye"></span>Watchlist</a>
+        <a id="discover-link" class="nav-link" href="#discover"><span class="icon" data-icon="compass"></span>Discover</a>
+      </nav>
+      <div class="side-section">
+        <div class="side-heading"><span>WATCHLISTS</span><button id="new-list" class="icon-button" aria-label="Create watchlist">+</button></div>
+        <div id="watchlist-nav" class="watchlist-nav"></div>
+      </div>
+      <div class="sidebar-footer">
+        <button id="profile-button" class="profile" aria-haspopup="dialog"><span id="profile-avatar" class="avatar">AR</span><span><b id="profile-name">Arjun Rao</b><small id="profile-type">Personal account</small></span><span class="kebab">•••</span></button>
+      </div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <button id="mobile-menu" class="mobile-menu" aria-label="Open menu">☰</button>
+        <label class="search"><span class="icon" data-icon="search"></span><input id="search" autocomplete="off" placeholder="Search stocks to add…"><kbd>⌘ K</kbd></label>
+        <div id="search-results" class="search-results" hidden></div>
+        <button id="help-button" class="help-button" aria-label="Help">?</button>
+        <button id="notification-button" class="bell" aria-label="Notifications" aria-haspopup="dialog"><span class="icon" data-icon="bell"></span><i id="notification-dot"></i></button>
+      </header>
+
+      <div class="content" id="watchlist-page">
+        <div class="page-heading">
+          <div>
+            <p class="eyebrow"><span class="live-dot"></span><span id="market-label">Market open</span><span>•</span><span id="as-of">Updated now</span></p>
+            <h1 id="list-title">My watchlist</h1>
+            <p id="list-subtitle">A clear view of what deserves your attention.</p>
+          </div>
+          <div class="heading-actions">
+            <button class="button secondary" id="manage-button"><span>⚙</span> Manage</button>
+            <button class="button primary" id="add-button">＋ Add stock</button>
+          </div>
+        </div>
+
+        <section class="attention-card" id="attention-card">
+          <div class="attention-icon">✦</div>
+          <div class="attention-copy">
+            <p class="attention-label">SINCE YOU LAST CHECKED</p>
+            <h2 id="attention-title">Here’s what needs your attention</h2>
+            <p id="attention-summary">Scanning your watchlist for meaningful moves…</p>
+          </div>
+          <button class="text-button" id="review-button">Mark as reviewed <span>→</span></button>
+        </section>
+
+        <section class="signals" id="signals" aria-label="Meaningful changes"></section>
+
+        <div class="table-header">
+          <div><h2>All stocks</h2><span id="stock-count" class="count">0</span></div>
+          <div class="view-controls">
+            <button id="filter-button" class="filter-button"><span class="icon" data-icon="filter"></span> Filters <span id="filter-count" class="filter-count" hidden>1</span></button>
+            <button class="view-button active" data-view="rows" aria-label="List view">☷</button>
+            <button class="view-button" data-view="cards" aria-label="Card view">▦</button>
+          </div>
+        </div>
+        <div id="filter-panel" class="filter-panel" hidden>
+          <span>Show</span>
+          <button data-filter="all" class="active">All</button><button data-filter="attention">Needs attention</button><button data-filter="gainers">Gainers</button><button data-filter="losers">Losers</button>
+        </div>
+
+        <div class="stock-table" id="stock-table">
+          <div class="stock-table-head"><span>COMPANY</span><span>PRICE</span><span>TODAY</span><span>7D TREND</span><span></span></div>
+          <div id="stock-rows"></div>
+        </div>
+        <div id="empty-state" class="empty-state" hidden><div>⌁</div><h3>No stocks match this view</h3><p>Try another filter or add a company to this watchlist.</p></div>
+        <footer class="data-note"><span class="icon" data-icon="clock"></span><span id="data-note">Prices are delayed by 1 minute</span><button id="method-button">How changes are detected</button></footer>
+      </div>
+      <div class="content discover-page" id="discover-page" hidden>
+        <div class="discover-hero">
+          <p class="eyebrow">EXPLORE THE MARKET</p>
+          <h1>Discover companies</h1>
+          <p>Explore a focused universe and add companies worth following—not trading recommendations.</p>
+        </div>
+        <div class="discover-toolbar">
+          <label class="discover-search"><span class="icon" data-icon="search"></span><input id="discover-search" placeholder="Search by company or symbol"></label>
+          <div id="sector-filters" class="sector-filters"></div>
+        </div>
+        <section class="discover-section">
+          <div class="discover-heading"><div><h2>Today’s movers</h2><p>Largest absolute moves in the demo market</p></div><span class="information-pill">Informational only</span></div>
+          <div id="discover-movers" class="discover-grid"></div>
+        </section>
+        <section class="discover-section">
+          <div class="discover-heading"><div><h2>All companies</h2><p id="discover-count">Explore the available market</p></div></div>
+          <div id="discover-companies" class="discover-list"></div>
+          <div id="discover-empty" class="empty-state" hidden><div>⌕</div><h3>No companies found</h3><p>Try another company, symbol, or sector.</p></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div id="scrim" class="scrim" hidden></div>
+  <dialog id="auth-dialog" class="auth-dialog">
+    <div class="auth-brand"><span class="brand-mark"><i></i><i></i><i></i></span><span>pulse</span></div>
+    <p class="dialog-kicker">SMART MARKET WATCHLIST</p>
+    <h2 id="auth-title">Welcome back</h2>
+    <p id="auth-copy" class="dialog-copy">Sign in to see what meaningfully changed.</p>
+    <div class="auth-tabs" role="tablist"><button class="active" data-auth-tab="login">Log in</button><button data-auth-tab="register">Register</button></div>
+    <form id="login-form" class="profile-form auth-form">
+      <label><span>Email</span><input name="email" type="email" autocomplete="email" required></label>
+      <label><span>Password</span><input name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" required></label>
+      <button class="button primary" type="submit">Log in</button>
+    </form>
+    <form id="register-form" class="profile-form auth-form" hidden>
+      <label><span>Name</span><input name="name" autocomplete="name" minlength="2" maxlength="50" required></label>
+      <label><span>Email</span><input name="email" type="email" autocomplete="email" required></label>
+      <label><span>Password</span><input name="password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required><small>Use at least 8 characters</small></label>
+      <button class="button primary" type="submit">Create account</button>
+    </form>
+    <div class="auth-divider"><span>or</span></div>
+    <button id="demo-login" class="button demo-button">Continue with demo account</button>
+    <p class="auth-note">Educational demo only · No financial transactions</p>
+  </dialog>
+  <dialog id="manage-dialog">
+    <button class="dialog-close" data-close aria-label="Close">×</button>
+    <p class="dialog-kicker">WATCHLIST SETTINGS</p><h2>Manage watchlist</h2>
+    <p class="dialog-copy">Rename this list or remove stocks you no longer want to track.</p>
+    <form id="rename-list-form" class="rename-list-form"><label><span>Watchlist name</span><span><input id="watchlist-name-input" maxlength="40" required><button class="button secondary" type="submit">Save</button></span></label></form>
+    <div class="manage-divider"><span>COMPANIES</span></div>
+    <div id="manage-list" class="manage-list"></div>
+    <div class="danger-zone"><div><b>Delete this watchlist</b><small id="delete-list-note">This cannot be undone.</small></div><button id="delete-list-button" class="button danger-button">Delete</button></div>
+  </dialog>
+  <dialog id="method-dialog">
+    <button class="dialog-close" data-close aria-label="Close">×</button>
+    <p class="dialog-kicker">TRANSPARENT BY DESIGN</p><h2>What counts as meaningful?</h2>
+    <p class="dialog-copy">Pulse uses a small set of explainable rules. It does not predict prices or give investment advice.</p>
+    <div class="rule"><b>Unusual price movement · 45%</b><span>Change since your review, compared with this stock’s own normal move</span></div>
+    <div class="rule"><b>Unusual activity · 30%</b><span>Current volume compared with its 20-day average and variability</span></div>
+    <div class="rule"><b>Important level crossed · 15%</b><span>A move through the previous session’s high or low</span></div>
+    <div class="rule"><b>Volatility shift · 10%</b><span>Today’s trading range compared with this stock’s normal range</span></div>
+    <p class="disclaimer">Only statistically unusual changes above the noise floor are shown, with at most five per visit. New stocks use conservative fallback data while a personal baseline is established.</p>
+    <p class="disclaimer">Signals are informational, not recommendations. Always do your own research before investing.</p>
+  </dialog>
+  <dialog id="profile-dialog">
+    <button class="dialog-close" data-close aria-label="Close">×</button>
+    <p class="dialog-kicker">PERSONAL ACCOUNT</p><h2>Profile settings</h2>
+    <p class="dialog-copy">Your preferences and review baseline are saved by the Pulse demo server.</p>
+    <form id="profile-form" class="profile-form">
+      <label><span>Name</span><input id="profile-name-input" name="name" maxlength="50" autocomplete="name" required></label>
+      <label><span>Email</span><input id="profile-email-input" name="email" maxlength="100" type="email" autocomplete="email" required></label>
+      <div class="account-status"><i></i><span><b>Sync active</b><small>Watchlists and review state persist across sessions</small></span></div>
+      <button id="reset-demo-button" class="button reset-demo-button" type="button">Restore starter watchlists</button>
+      <div class="profile-actions"><button id="logout-button" class="button danger-button" type="button">Log out</button><button class="button primary" type="submit">Save profile</button></div>
+    </form>
+  </dialog>
+  <dialog id="help-dialog" class="help-dialog">
+    <button class="dialog-close" data-close aria-label="Close">×</button>
+    <p class="dialog-kicker">QUICK GUIDE</p><h2>How Pulse works</h2>
+    <p class="dialog-copy">Pulse filters market noise and explains what changed since your last review.</p>
+    <div class="help-step"><span>1</span><div><b>Build a focused watchlist</b><small>Search or use Discover to add companies you want to follow.</small></div></div>
+    <div class="help-step"><span>2</span><div><b>Review meaningful changes</b><small>Signals compare each stock with its own history and your saved baseline.</small></div></div>
+    <div class="help-step"><span>3</span><div><b>Mark changes reviewed</b><small>Pulse stays quiet until activity meaningfully escalates again.</small></div></div>
+    <div class="keyboard-tip"><kbd>Ctrl</kbd><span>+</span><kbd>K</kbd><span>Search stocks from anywhere</span></div>
+    <button id="help-method" class="button secondary full-button">View signal methodology</button>
+  </dialog>
+  <dialog id="notification-dialog" class="notification-dialog">
+    <button class="dialog-close" data-close aria-label="Close">×</button>
+    <p class="dialog-kicker">ATTENTION CENTER</p><h2>Notifications</h2>
+    <p id="notification-freshness" class="dialog-copy"></p>
+    <div id="notification-list" class="notification-list"></div>
+    <button id="notifications-review" class="button primary full-button">Mark all as reviewed</button>
+  </dialog>
+  <div id="toast-region" class="toast-region" aria-live="polite"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

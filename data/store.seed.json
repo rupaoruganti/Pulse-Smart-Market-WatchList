@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "accounts": [
+    {
+      "id": "demo-user",
+      "user": {
+        "id": "demo-user",
+        "name": "Pulse Demo",
+        "email": "demo@example.com",
+        "accountType": "Demo account"
+      },
+      "passwordSalt": null,
+      "passwordHash": null,
+      "lastReviewedAt": "2026-09-04T03:45:00.000Z",
+      "lastReviewedSnapshots": {
+        "RELIANCE": { "price": 1381.25, "volume": 9.2, "high": 1394.4, "low": 1372.1, "timestamp": "2026-09-04T03:45:00.000Z" },
+        "HDFCBANK": { "price": 1691.7, "volume": 7.1, "high": 1704.2, "low": 1682.5, "timestamp": "2026-09-04T03:45:00.000Z" },
+        "ZOMATO": { "price": 318.3, "volume": 27.5, "high": 323.8, "low": 313.4, "timestamp": "2026-09-04T03:45:00.000Z" },
+        "TCS": { "price": 3095.6, "volume": 2.4, "high": 3122.4, "low": 3078.7, "timestamp": "2026-09-04T03:45:00.000Z" },
+        "INFY": { "price": 1489.1, "volume": 6, "high": 1502.2, "low": 1476.4, "timestamp": "2026-09-04T03:45:00.000Z" },
+        "TATAMOTORS": { "price": 735.2, "volume": 12.6, "high": 742.8, "low": 727.1, "timestamp": "2026-09-04T03:45:00.000Z" }
+      },
+      "watchlists": [
+        { "id": "core", "name": "My watchlist", "symbolIds": ["RELIANCE", "HDFCBANK", "ZOMATO", "TCS", "INFY", "TATAMOTORS"] },
+        { "id": "earnings", "name": "Earnings radar", "symbolIds": ["TCS", "INFY", "HDFCBANK"] }
+      ]
+    }
+  ]
+}
