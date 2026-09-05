@@ -13,7 +13,16 @@ if (-not $stagingPath.StartsWith($temporaryBase, [System.StringComparison]::Ordi
 try {
   New-Item -ItemType Directory -Path $stagingPath | Out-Null
 
-  $files = @('.gitignore', 'package.json', 'README.md', 'server.js', 'scoring.js', 'market-data.js')
+  $files = @(
+    '.gitignore',
+    'package.json',
+    'README.md',
+    'server.js',
+    'scoring.js',
+    'market-data.js',
+    '01-smart-watchlist.png',
+    '02-discover.png'
+  )
   foreach ($file in $files) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $file) -Destination (Join-Path $stagingPath $file)
   }
