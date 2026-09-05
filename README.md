@@ -93,10 +93,6 @@ The simulator exercises changing and stale data paths, but deliberately does not
 
 ## Tests
 
-```bash
-npm test
-```
-
 The 17 automated tests cover scoring, reviewed-anomaly suppression and re-escalation, corporate-action handling, provider normalization and failure, authentication, account isolation, optimistic concurrency, watchlist CRUD, demo reset, and path traversal.
 
 ## API
